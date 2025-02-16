@@ -160,6 +160,26 @@ class StaticList
         Serial.print(", Z: ");
         Serial.println(net_velocity_z, 2);
     }
+
+    void update(float Ax_fixed, float Ay_fixed, float Az_fixed)
+    {
+        if (size < MAX_SIZE)
+        {
+            pushFront(Ax_fixed, Ay_fixed, Az_fixed);
+        }
+        else
+        {
+            float popped_x = 0.0;
+            float popped_y = 0.0;
+            float popped_z = 0.0;
+            accelList.pushAndPop(Ax_fixed, Ay_fixed, Az_fixed, popped_x, popped_y, popped_z);
+            float vx = 0;
+            float vy = 0;
+            float vz = 0;
+            accelList.getNetVelocity(vx, vy, vz);
+            accelList.updateNetVelocity(vx + popped_x, vy + popped_y, vz + popped_z);
+        }
+    }
 };
 
 // Create an instance of the static list
@@ -213,31 +233,17 @@ void loop()
     Az_fixed -= 1.0;
 
     // Print results
-    Serial.print("Ax_fixed: ");
-    Serial.print(Ax_fixed);
-    Serial.print(" | Ay_fixed: ");
-    Serial.print(Ay_fixed);
-    Serial.print(" | Az_fixed: ");
-    Serial.println(Az_fixed);
+    // Serial.print("Ax_fixed: ");
+    // Serial.print(Ax_fixed);
+    // Serial.print(" | Ay_fixed: ");
+    // Serial.print(Ay_fixed);
+    // Serial.print(" | Az_fixed: ");
+    // Serial.println(Az_fixed);
 
     /////////////////////////////////////////////////////////////////////
     /*velocity and stuff*/
     /////////////////////////////////////////////////////////////////////
-    if (accelList.getSize() < MAX_SIZE)
-    {
-        accelList.pushFront(Ax_fixed, Ay_fixed, Az_fixed);
-    }
-    else
-    {
-        float popped_x = 0.0;
-        float popped_y = 0.0;
-        float popped_z = 0.0;
-        accelList.pushAndPop(Ax_fixed, Ay_fixed, Az_fixed, popped_x, popped_y, popped_z);
-        float vx = 0;
-        float vy = 0;
-        float vz = 0;
-        accelList.getNetVelocity(vx, vy, vz);
-        accelList.updateNetVelocity(vx + popped_x, vy + popped_y, vz + popped_z);
-    }
+    accelList.update(Ax_fixed, Ay_fixed, Az_fixed);
+    accelList.display();
     delay(100);
 }
