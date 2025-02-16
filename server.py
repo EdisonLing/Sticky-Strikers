@@ -5,6 +5,11 @@ from spritesheet import Spritesheet
 
 # Initialize the game
 pygame.init()
+pygame.mixer.init()  # Initialize the mixer module
+
+pygame.mixer.music.load("StickyStrickersBGM.wav")  #load BGM file
+pygame.mixer.music.set_volume(0.5)  #set volume (0.0 to 1.0)
+pygame.mixer.music.play(-1)  # -1 makes it loop forever
 
 # Set up display
 WIDTH, HEIGHT = 800, 400
