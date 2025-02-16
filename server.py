@@ -5,11 +5,6 @@ from spritesheet import Spritesheet
 
 # Initialize the game
 pygame.init()
-pygame.mixer.init()  # Initialize the mixer module
-
-pygame.mixer.music.load("StickyStrickersBGM.wav")  #load BGM file
-pygame.mixer.music.set_volume(0.5)  #set volume (0.0 to 1.0)
-pygame.mixer.music.play(-1)  # -1 makes it loop forever
 
 # Set up display
 WIDTH, HEIGHT = 800, 400
@@ -52,7 +47,7 @@ player_width, player_height = 177, 69
 player1_x, player1_y = 50, 0
 player2_x, player2_y = WIDTH - 177, 0
 player_speed = 5
-health1, health2 = 10, 10  # Health points
+health1, health2 = 20, 20  # Health points
 attack_cooldown1, attack_cooldown2 = 0, 0  # Cooldown timers
 cooldown_time = 10  # Frames before another attack
 punching1, punching2 = False, False
@@ -75,14 +70,15 @@ def joystick_server():
         global joystick_command
         data = request.json
         joystick_command = data['command']
+        value = data.get('value', 1)  # Default value to 1 if not provided
 
         # pygame events for BLUE player
         if joystick_command == "RIGHT_B":
             custom_event = pygame.event.Event(pygame.USEREVENT, command="RIGHT_B")
         elif joystick_command == "LEFT_B":
             custom_event = pygame.event.Event(pygame.USEREVENT, command="LEFT_B")
-        elif joystick_command == "PUNCH_B":
-            custom_event = pygame.event.Event(pygame.USEREVENT, command="PUNCH_B")
+        elif joystick_command == "ACCEL_B":
+            custom_event = pygame.event.Event(pygame.USEREVENT, command="ACCEL_B", value=value)
         elif joystick_command == "ULT_B":
             custom_event = pygame.event.Event(pygame.USEREVENT, command="ULT_B")
         # Add events for the RED player
@@ -90,8 +86,8 @@ def joystick_server():
             custom_event = pygame.event.Event(pygame.USEREVENT, command="RIGHT_R")
         elif joystick_command == "LEFT_R":
             custom_event = pygame.event.Event(pygame.USEREVENT, command="LEFT_R")
-        elif joystick_command == "PUNCH_R":
-            custom_event = pygame.event.Event(pygame.USEREVENT, command="PUNCH_R")
+        elif joystick_command == "ACCEL_R":
+            custom_event = pygame.event.Event(pygame.USEREVENT, command="ACCEL_R", value=value)
         elif joystick_command == "ULT_R":
             custom_event = pygame.event.Event(pygame.USEREVENT, command="ULT_R")
         else:
@@ -108,19 +104,19 @@ def joystick_server():
 server_thread = threading.Thread(target=joystick_server, daemon=True)
 server_thread.start()
 
-def handle_punch_r():
+def handle_punch_r(damage):
     global indexR, attack_cooldown1, punching1, health2
     indexR = 1 if dmgRed == 1 else 3
     if abs(player1_x - player2_x) < player_width:
-        health2 -= dmgRed
+        health2 -= damage * dmgRed
     attack_cooldown1 = cooldown_time
     punching1 = True
 
-def handle_punch_b():
+def handle_punch_b(damage):
     global indexB, attack_cooldown2, punching2, health1
     indexB = 1 if dmgBlue == 1 else 3
     if abs(player2_x - player1_x) < player_width:
-        health1 -= dmgBlue
+        health1 -= damage * dmgBlue
     attack_cooldown2 = cooldown_time
     punching2 = True
 
@@ -162,7 +158,7 @@ def reset_game():
     global player1_x, player1_y, player2_x, player2_y, health1, health2, attack_cooldown1, attack_cooldown2, punching1, punching2, on_main_menu, on_win_screen, winner, indexB, indexR, dmgRed, dmgBlue
     player1_x, player1_y = 50, 0
     player2_x, player2_y = WIDTH - 175, 0
-    health1, health2 = 10, 10
+    health1, health2 = 20, 20
     attack_cooldown1, attack_cooldown2 = 0, 0
     indexB, indexR = 0, 0
     punching1, punching2 = False, False
@@ -193,8 +189,8 @@ while running:
                     player2_x += player_speed
                 elif event.command == "LEFT_B" and can_move_left(player2_x, player_width, player1_x, player_width):
                     player2_x -= player_speed
-                elif event.command == "PUNCH_B" and attack_cooldown2 == 0:
-                    handle_punch_b()
+                elif event.command == "ACCEL_B" and attack_cooldown2 == 0:
+                    handle_punch_b(event.value)
                 elif event.command == "ULT_B":
                     dmgBlue *= 2
                     indexB = 2
@@ -202,8 +198,8 @@ while running:
                     player1_x += player_speed
                 elif event.command == "LEFT_R" and can_move_left(player1_x, player_width, player2_x, player_width):
                     player1_x -= player_speed
-                elif event.command == "PUNCH_R" and attack_cooldown1 == 0:
-                    handle_punch_r()
+                elif event.command == "ACCEL_R" and attack_cooldown1 == 0:
+                    handle_punch_r(event.value)
                 elif event.command == "ULT_R":
                     dmgRed *= 2
                     indexR = 2
@@ -220,13 +216,13 @@ while running:
                 elif event.key == pygame.K_a and can_move_left(player1_x, player_width, player2_x, player_width):
                     player1_x -= player_speed
                 elif event.key == pygame.K_g and attack_cooldown1 == 0:
-                    handle_punch_r()
+                    handle_punch_r(dmgRed)
                 elif event.key == pygame.K_RIGHT and can_move_right(player2_x, player_width, player1_x, player_width, WIDTH + 52):
                     player2_x += player_speed
                 elif event.key == pygame.K_LEFT and can_move_left(player2_x, player_width, player1_x, player_width):
                     player2_x -= player_speed
                 elif event.key == pygame.K_l and attack_cooldown2 == 0:
-                    handle_punch_b()
+                    handle_punch_b(dmgBlue)
                 elif event.key == pygame.K_u:
                     dmgBlue *= 2
                     indexB = 2
@@ -275,8 +271,8 @@ while running:
 
         # 3. Draw the UI elements
         # Health bars
-        pygame.draw.rect(canvas, (255, 0, 0), (50, 20, health1 * 20, 20))
-        pygame.draw.rect(canvas, (0, 0, 255), (WIDTH - (health2 * 20) - 50, 20, health2 * 20, 20))
+        pygame.draw.rect(canvas, (255, 0, 0), (50, 20, health1 * 10, 20))
+        pygame.draw.rect(canvas, (0, 0, 255), (WIDTH - (health2 * 10) - 50, 20, health2 * 10, 20))
 
         # Blit the canvas onto the window
         window.blit(canvas, (0, 0))
