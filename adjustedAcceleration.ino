@@ -1,6 +1,9 @@
 #include <Wire.h>
 #include <math.h>
+
 #define MAX_SIZE 50 // Set maximum list size
+#define ALPHA 0.9   // Low-pass filter factor (tune between 0.8 - 0.98)
+#define DT 0.1      // Time step for velocity integration (100ms)
 
 class StaticList
 {
@@ -39,14 +42,6 @@ class StaticList
         y_accel[0] = y; // Insert Y at front
         z_accel[0] = z; // Insert Z at front
         size++;
-
-        Serial.print("Pushed X: ");
-        Serial.print(x, 2);
-        Serial.print(", Y: ");
-        Serial.print(y, 2);
-        Serial.print(", Z: ");
-        Serial.print(z, 2);
-        Serial.println(" to the front.");
     }
 
     // Pop from Back (Remove the last element)
@@ -63,104 +58,25 @@ class StaticList
         x = x_accel[size];
         y = y_accel[size];
         z = z_accel[size];
-
-        Serial.print("Popped X: ");
-        Serial.print(x, 2);
-        Serial.print(", Y: ");
-        Serial.print(y, 2);
-        Serial.print(", Z: ");
-        Serial.print(z, 2);
-        Serial.println(" from the back.");
     }
 
-    // Get the number of elements
-    int getSize()
+    // Get the current net velocity
+    void getNetVelocity(float &vx, float &vy, float &vz)
     {
-        Serial.print("Current Size: ");
-        Serial.println(size);
-        return size;
-    }
-
-    // Get the total sum of X, Y, and Z values
-    void getTotal(float &x_sum, float &y_sum, float &z_sum)
-    {
-        x_sum = y_sum = z_sum = 0;
-
-        for (int i = 0; i < size; i++)
-        {
-            x_sum += x_accel[i];
-            y_sum += y_accel[i];
-            z_sum += z_accel[i];
-        }
-
-        Serial.print("Total X Sum: ");
-        Serial.print(x_sum, 2);
-        Serial.print(", Total Y Sum: ");
-        Serial.print(y_sum, 2);
-        Serial.print(", Total Z Sum: ");
-        Serial.println(z_sum, 2);
-    }
-
-    // Display the list
-    void display()
-    {
-        if (size == 0)
-        {
-            Serial.println("List is empty.");
-            return;
-        }
-
-        Serial.println("X Accel -> Y Accel -> Z Accel:");
-        for (int i = 0; i < size; i++)
-        {
-            Serial.print(x_accel[i], 2);
-            Serial.print(" -> ");
-            Serial.print(y_accel[i], 2);
-            Serial.print(" -> ");
-            Serial.print(z_accel[i], 2);
-            Serial.println();
-        }
-    }
-
-    // Push new values and remove the oldest
-    void pushAndPop(float x, float y, float z, float &popped_x, float &popped_y, float &popped_z)
-    {
-        popBack(popped_x, popped_y, popped_z);
-        pushFront(x, y, z);
+        vx = net_velocity_x;
+        vy = net_velocity_y;
+        vz = net_velocity_z;
     }
 
     // Update net velocity with a new velocity change
     void updateNetVelocity(float vx, float vy, float vz)
     {
-        net_velocity_x += vx;
-        net_velocity_y += vy;
-        net_velocity_z += vz;
-
-        Serial.print("Updated Net Velocity -> X: ");
-        Serial.print(net_velocity_x, 2);
-        Serial.print(", Y: ");
-        Serial.print(net_velocity_y, 2);
-        Serial.print(", Z: ");
-        Serial.println(net_velocity_z, 2);
+        net_velocity_x = vx;
+        net_velocity_y = vy;
+        net_velocity_z = vz;
     }
 
-    // Get the current net velocity
-    void getNetVelocity(float &vx, float &vy,
-                        float &vz) // declare variables in vx vy vz that will
-                                   // then have net vel's stored in them
-    {
-        vx = net_velocity_x;
-        vy = net_velocity_y;
-        vz = net_velocity_z;
-
-        Serial.print("Net Velocity -> X: ");
-        Serial.print(net_velocity_x, 2);
-        Serial.print(", Y: ");
-        Serial.print(net_velocity_y, 2);
-        Serial.print(", Z: ");
-        Serial.println(net_velocity_z, 2);
-    }
-
+    // Update acceleration data & velocity calculations
     void update(float Ax_fixed, float Ay_fixed, float Az_fixed)
     {
         if (size < MAX_SIZE)
@@ -169,22 +85,40 @@ class StaticList
         }
         else
         {
-            float popped_x = 0.0;
-            float popped_y = 0.0;
-            float popped_z = 0.0;
-            accelList.pushAndPop(Ax_fixed, Ay_fixed, Az_fixed, popped_x, popped_y, popped_z);
-            float vx = 0;
-            float vy = 0;
-            float vz = 0;
-            accelList.getNetVelocity(vx, vy, vz);
-            accelList.updateNetVelocity(vx + popped_x, vy + popped_y, vz + popped_z);
+            float popped_x = 0.0, popped_y = 0.0, popped_z = 0.0;
+            popBack(popped_x, popped_y, popped_z);
+
+            float vx = 0, vy = 0, vz = 0;
+            getNetVelocity(vx, vy, vz);
+
+            // Apply low-pass filter to smooth acceleration readings
+            Ax_fixed = ALPHA * Ax_fixed + (1 - ALPHA) * popped_x;
+            Ay_fixed = ALPHA * Ay_fixed + (1 - ALPHA) * popped_y;
+            Az_fixed = ALPHA * Az_fixed + (1 - ALPHA) * popped_z;
+
+            // Update velocity using correct time integration
+            updateNetVelocity(vx + popped_x * DT, vy + popped_y * DT, vz + popped_z * DT);
+
+            pushFront(Ax_fixed, Ay_fixed, Az_fixed);
         }
+    }
+
+    // Display the net velocity
+    void display()
+    {
+        Serial.print("Net Velocity X: ");
+        Serial.print(net_velocity_x, 2);
+        Serial.print(" | Y: ");
+        Serial.print(net_velocity_y, 2);
+        Serial.print(" | Z: ");
+        Serial.println(net_velocity_z, 2);
     }
 };
 
 // Create an instance of the static list
 StaticList accelList;
 
+// MPU-6050 Setup
 const int MPU = 0x68;
 int16_t AcX, AcY, AcZ;
 float Ax, Ay, Az, roll, pitch;
@@ -204,7 +138,7 @@ void setup()
 
 void loop()
 {
-    // Read raw acceleration data
+    // Read raw acceleration data from MPU-6050
     Wire.beginTransmission(MPU);
     Wire.write(0x3B);
     Wire.endTransmission(false);
@@ -219,31 +153,21 @@ void loop()
     Ay = AcY / 16384.0;
     Az = AcZ / 16384.0;
 
-    // Compute roll and pitch angles
+    // Compute roll and pitch angles (used for gravity compensation)
     roll = atan2(Ay, Az);
     pitch = atan2(-Ax, sqrt(Ay * Ay + Az * Az));
 
-    // Compute corrected acceleration
+    // Compute corrected acceleration by adjusting for tilt
     Ax_fixed = Ax * cos(pitch) + Az * sin(pitch);
     Ay_fixed = Ay * cos(roll) - Az * sin(roll);
-
     Az_fixed = Az * cos(roll) * cos(pitch) - Ax * sin(pitch) - Ay * sin(roll);
 
-    // Remove gravity from Z-axis
-    Az_fixed -= 1.0;
+    // Improved gravity compensation (using roll & pitch)
+    Az_fixed -= 9.81 * cos(roll) * cos(pitch);
 
-    // Print results
-    // Serial.print("Ax_fixed: ");
-    // Serial.print(Ax_fixed);
-    // Serial.print(" | Ay_fixed: ");
-    // Serial.print(Ay_fixed);
-    // Serial.print(" | Az_fixed: ");
-    // Serial.println(Az_fixed);
-
-    /////////////////////////////////////////////////////////////////////
-    /*velocity and stuff*/
-    /////////////////////////////////////////////////////////////////////
+    // Update acceleration & velocity calculations
     accelList.update(Ax_fixed, Ay_fixed, Az_fixed);
     accelList.display();
-    delay(100);
+
+    delay(100); // Matches DT (100ms delay)
 }
