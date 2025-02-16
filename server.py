@@ -16,15 +16,27 @@ pygame.display.set_caption("Sticky Strikers!")
 clock = pygame.time.Clock()
 
 spritesheetR = Spritesheet('spritesheetR.png')
-red = [spritesheetR.parse_sprite('red_idle.png'), spritesheetR.parse_sprite('red_punch.png')]
+red = [
+    spritesheetR.parse_sprite('red_idle.png'),
+    spritesheetR.parse_sprite('red_punch.png'),
+    spritesheetR.parse_sprite('red_ult_idle.png'),
+    spritesheetR.parse_sprite('red_ult_punch.png')
+]
 
 spritesheetB = Spritesheet('spritesheetB.png')
-blue = [spritesheetB.parse_sprite('blue_idle.png'), spritesheetB.parse_sprite('blue_punch.png')]
+blue = [
+    spritesheetB.parse_sprite('blue_idle.png'),
+    spritesheetB.parse_sprite('blue_punch.png'),
+    spritesheetB.parse_sprite('blue_ult_idle.png'),
+    spritesheetB.parse_sprite('blue_ult_punch.png')
+]
 
 # Frame widths for blue character
 blue_frame_widths = {
     'blue_idle.png': 125,
-    'blue_punch.png': 177
+    'blue_punch.png': 177,
+    'blue_ult_idle.png': 125,
+    'blue_ult_punch.png': 177
 }
 
 # Joystick control variables
@@ -33,7 +45,7 @@ joystick_command = None
 # Player properties
 player_width, player_height = 177, 69
 player1_x, player1_y = 50, 0
-player2_x, player2_y = WIDTH - 175, 0
+player2_x, player2_y = WIDTH - 177, 0
 player_speed = 5
 health1, health2 = 10, 10  # Health points
 attack_cooldown1, attack_cooldown2 = 0, 0  # Cooldown timers
@@ -93,7 +105,7 @@ server_thread.start()
 
 def handle_punch_r():
     global indexR, attack_cooldown1, punching1, health2
-    indexR = 1
+    indexR = 1 if dmgRed == 1 else 3
     if abs(player1_x - player2_x) < player_width:
         health2 -= dmgRed
     attack_cooldown1 = cooldown_time
@@ -101,17 +113,17 @@ def handle_punch_r():
 
 def handle_punch_b():
     global indexB, attack_cooldown2, punching2, health1
-    indexB = 1
+    indexB = 1 if dmgBlue == 1 else 3
     if abs(player2_x - player1_x) < player_width:
         health1 -= dmgBlue
     attack_cooldown2 = cooldown_time
     punching2 = True
 
-def can_move_right(player_x, other_player_x):
-    return player_x + player_width < other_player_x
+def can_move_right(player_x, player_width, other_player_x, other_player_width, max_width):
+    return player_x + player_width < max_width and (player_x + player_width < other_player_x or player_x > other_player_x + other_player_width)
 
-def can_move_left(player_x, other_player_x):
-    return player_x > other_player_x + player_width
+def can_move_left(player_x, player_width, other_player_x, other_player_width):
+    return player_x > 0 and (player_x > other_player_x + other_player_width or player_x + player_width < other_player_x)
 
 def draw_main_menu():
     canvas.fill((255, 255, 255))  # Fill the canvas with white
@@ -142,7 +154,7 @@ def draw_win_screen():
     pygame.display.update()
 
 def reset_game():
-    global player1_x, player1_y, player2_x, player2_y, health1, health2, attack_cooldown1, attack_cooldown2, punching1, punching2, on_main_menu, on_win_screen, winner, indexB, indexR
+    global player1_x, player1_y, player2_x, player2_y, health1, health2, attack_cooldown1, attack_cooldown2, punching1, punching2, on_main_menu, on_win_screen, winner, indexB, indexR, dmgRed, dmgBlue
     player1_x, player1_y = 50, 0
     player2_x, player2_y = WIDTH - 175, 0
     health1, health2 = 10, 10
@@ -152,6 +164,8 @@ def reset_game():
     on_main_menu = False
     on_win_screen = False
     winner = None
+    dmgRed = 1
+    dmgBlue = 1
 
 # Main game loop
 running = True
@@ -170,18 +184,24 @@ while running:
                     reset_game()
             else:
                 # Handle custom events
-                if event.command == "RIGHT_B" and can_move_right(player2_x, player1_x):
+                if event.command == "RIGHT_B" and can_move_right(player2_x, player_width, player1_x, player_width, WIDTH + 52):
                     player2_x += player_speed
-                elif event.command == "LEFT_B" and can_move_left(player2_x, player1_x):
+                elif event.command == "LEFT_B" and can_move_left(player2_x, player_width, player1_x, player_width):
                     player2_x -= player_speed
                 elif event.command == "PUNCH_B" and attack_cooldown2 == 0:
                     handle_punch_b()
-                elif event.command == "RIGHT_R" and can_move_right(player1_x, player2_x):
+                elif event.command == "ULT_B":
+                    dmgBlue *= 2
+                    indexB = 2
+                elif event.command == "RIGHT_R" and can_move_right(player1_x, player_width, player2_x, player_width, WIDTH):
                     player1_x += player_speed
-                elif event.command == "LEFT_R" and can_move_left(player1_x, player2_x):
+                elif event.command == "LEFT_R" and can_move_left(player1_x, player_width, player2_x, player_width):
                     player1_x -= player_speed
                 elif event.command == "PUNCH_R" and attack_cooldown1 == 0:
                     handle_punch_r()
+                elif event.command == "ULT_R":
+                    dmgRed *= 2
+                    indexR = 2
         elif event.type == pygame.KEYDOWN:
             if on_main_menu:
                 if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
@@ -190,18 +210,24 @@ while running:
                 if event.key == pygame.K_SPACE:
                     reset_game()
             else:
-                if event.key == pygame.K_d and can_move_right(player1_x, player2_x):
+                if event.key == pygame.K_d and can_move_right(player1_x, player_width, player2_x, player_width, WIDTH):
                     player1_x += player_speed
-                elif event.key == pygame.K_a and can_move_left(player1_x, player2_x):
+                elif event.key == pygame.K_a and can_move_left(player1_x, player_width, player2_x, player_width):
                     player1_x -= player_speed
                 elif event.key == pygame.K_g and attack_cooldown1 == 0:
                     handle_punch_r()
-                elif event.key == pygame.K_RIGHT and can_move_right(player2_x, player1_x):
+                elif event.key == pygame.K_RIGHT and can_move_right(player2_x, player_width, player1_x, player_width, WIDTH + 52):
                     player2_x += player_speed
-                elif event.key == pygame.K_LEFT and can_move_left(player2_x, player1_x):
+                elif event.key == pygame.K_LEFT and can_move_left(player2_x, player_width, player1_x, player_width):
                     player2_x -= player_speed
                 elif event.key == pygame.K_l and attack_cooldown2 == 0:
                     handle_punch_b()
+                elif event.key == pygame.K_u:
+                    dmgBlue *= 2
+                    indexB = 2
+                elif event.key == pygame.K_r:
+                    dmgRed *= 2
+                    indexR = 2
 
     if on_main_menu:
         draw_main_menu()
@@ -237,9 +263,10 @@ while running:
         canvas.fill((255, 255, 255))  # Fill the canvas with white
 
         # 2. Draw the player sprites
+        red_frame_width = player_width if indexR in [0, 2] else player_width
+        blue_frame_width = blue_frame_widths['blue_punch.png'] if indexB in [1, 3] else blue_frame_widths['blue_idle.png']
         canvas.blit(red[indexR], (player1_x, player1_y))
-        blue_frame_width = blue_frame_widths['blue_punch.png'] if indexB == 1 else blue_frame_widths['blue_idle.png']
-        canvas.blit(blue[indexB], (player2_x - (blue_frame_widths['blue_punch.png'] - blue_frame_widths['blue_idle.png']) if indexB == 1 else player2_x, player2_y))
+        canvas.blit(blue[indexB], (player2_x - (blue_frame_widths['blue_punch.png'] - blue_frame_widths['blue_idle.png']) if indexB in [1, 3] else player2_x, player2_y))
 
         # 3. Draw the UI elements
         # Health bars
